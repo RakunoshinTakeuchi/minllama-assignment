@@ -1,1 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+
+# Mac / OS
+.DS_Store
+
+# Model Weights (重いファイルはGitに入れない)
+*.pt
+*.pth
+*.bin
 stories42M.pt
+
+# Assignment Outputs (実行結果はGitに入れない)
+*-output.txt
+generated-*.txt
+*.zip
+
+# Editor Config
+.vscode/
+.idea/
+.ipynb_checkpoints/
