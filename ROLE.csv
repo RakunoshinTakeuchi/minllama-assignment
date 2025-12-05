@@ -1,0 +1,4 @@
+担当者,役割,担当ファイル/クラス,主な作業内容
+1人目,モデル・コア構造 (Architecture),model.py,1. Self-Attention 機構の実装 (Q/K/V計算、マスク処理、RoPE位置エンコーディング)。 2. MLP (Feed-Forward Network) の実装。 3. Transformer Block の実装と組み立て (LayerNorm、Residual)。 4. モデル全体の定義。
+2人目,データパイプライン (Data I/O),data.py / train.py (一部),1. データローダーの実装 (stories42M.pt を効率的に読み込み、バッチ化)。 2. トークナイザのラッパー (入出力用) の準備。 3. サンプリング戦略の決定と実装。
+3人目,学習実行と制御 (Engine & Training),train.py (メイン) / config.py,1. ハイパーパラメータの定義 (config.py)。 2. メインの学習ループの実装 (エポック、イテレーション管理)。 3. Optimizer (AdamW) の設定。 4. Learning Rate Scheduler (学習率スケジューラ) の設定と適用。 5. 損失関数の適用とログ記録。
