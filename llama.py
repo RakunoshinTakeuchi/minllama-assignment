@@ -28,7 +28,7 @@ class RMSNorm(torch.nn.Module):
         """
         super().__init__()
         self.eps = eps
-        self.weight = nn.Parameter(torch.ones(dim))
+        self.weight = nn.Parameter(torch.ones(dim)) #gainに相当
 
     def _norm(self, x):
         """
@@ -44,9 +44,11 @@ class RMSNorm(torch.nn.Module):
             torch.Tensor: The normalized tensor.
         """
         # todo
-        raise NotImplementedError
+        rms = torch.sqrt(torch.mean(x.pow(2), dim = -1, keepdim = True) + self.eps) #RMSnormの計算
 
-    def forward(self, x):
+        return x / rms * self.weight
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor: 
         """
         Apply the root mean square normalizer.
 
@@ -84,7 +86,7 @@ class Attention(nn.Module):
                                        key: torch.Tensor,
                                        value: torch.Tensor) -> torch.Tensor:
         '''
-        Jointly compute Scaled Dot Product Attention (see Section 3.2.1 in
+        Jointly compute Scaled Dot-Product Attention (see Section 3.2.1 in
         https://arxiv.org/abs/1706.03762 for details). The query, key, and
         value tensors each have shape (bs, n_local_heads, seqlen, head_dim).
         An optimal implemention will jointly computing attention for multiple
@@ -93,8 +95,14 @@ class Attention(nn.Module):
         Make sure to use attention_dropout (self.attn_dropout) on the computed
         attention matrix before applying it to the value tensor.
         '''
+
         # todo
-        raise NotImplementedError
+        qkt = torch.matmul(query, key.transpose(-2, -1))  #queryとkeyの行列積
+        scores = qkt / math.sqrt(query.size(-1))  #次元数でわる
+        soft = F.softmax(scores, dim = -1) # softmax で確率にする
+
+        return torch.matmul(soft, value) # 文脈化 
+
 
     def forward(
         self,
@@ -179,7 +187,7 @@ class LlamaLayer(nn.Module):
         )
         self.layer_id = layer_id
         self.attention_norm = RMSNorm(config.dim, eps=config.layer_norm_eps)
-        self.ffn_norm = RMSNorm(config.dim, eps=config.layer_norm_eps)
+        self.ffn_norm = RMSNorm(config.dim, eps=config.layer_norm_eps)  #ここはなぜ別々にしているの
 
     def forward(self, x):
         '''
@@ -197,7 +205,12 @@ class LlamaLayer(nn.Module):
            output of the feed-forward network
         '''
         # todo
-        raise NotImplementedError
+        norm = self.attention_norm._norm(x) #(1)
+        att = self.attention(norm) # (2)
+        h = att + x #(3)
+        ffn_norm = self.ffm_norm._norm(h) #(3)
+
+        return self.feed_forward(ffn_norm) + h #(4)(5)
 
 class Llama(LlamaPreTrainedModel):
     def __init__(self, config: LlamaConfig):
