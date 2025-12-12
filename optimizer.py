@@ -31,30 +31,60 @@ class AdamW(Optimizer):
             loss = closure()
 
         for group in self.param_groups:
+            beta1, beta2 = group["betas"]
+            eps = group["eps"]
+            weight_decay = group["weight_decay"]
+            lr = group["lr"]
+            correct_bias = group["correct_bias"]
+
             for p in group["params"]:
                 if p.grad is None:
                     continue
                 grad = p.grad.data
                 if grad.is_sparse:
-                    raise RuntimeError("Adam does not support sparse gradients, please consider SparseAdam instead")
-
-                raise NotImplementedError()
+                    raise RuntimeError(
+                        "Adam does not support sparse gradients, "
+                        "please consider SparseAdam instead"
+                    )
 
                 # State should be stored in this dictionary
                 state = self.state[p]
 
-                # Access hyperparameters from the `group` dictionary
-                alpha = group["lr"]
+                # State initialization
+                if len(state) == 0:
+                    state["step"] = 0
+                    # First moment
+                    state["exp_avg"] = torch.zeros_like(p.data)
+                    # Second moment
+                    state["exp_avg_sq"] = torch.zeros_like(p.data)
+
+                exp_avg, exp_avg_sq = state["exp_avg"], state["exp_avg_sq"]
+
+                state["step"] += 1
+                t = state["step"]
 
                 # Update first and second moments of the gradients
+                exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
+                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
 
-                # Bias correction
-                # Please note that we are using the "efficient version" given in
-                # https://arxiv.org/abs/1412.6980
+                # Bias correction（efficient version, Adam 論文通り）
+                if correct_bias:
+                    bias_correction1 = 1 - beta1 ** t
+                    bias_correction2 = 1 - beta2 ** t
+                    step_size = lr * (bias_correction2 ** 0.5) / bias_correction1
+                else:
+                    step_size = lr
 
-                # Update parameters
+                # denom = √(v_hat) + eps
+                denom = exp_avg_sq.sqrt().add_(eps)
 
-                # Add weight decay after the main gradient-based updates.
-                # Please note that the learning rate should be incorporated into this update.
+                # Update parameters (Adam 本体)
+                p.data.addcdiv_(exp_avg, denom, value=-step_size)
+
+                # Add weight decay after the main gradient-based updates
+                if weight_decay != 0.0:
+                    # lr を組み込んだ decoupled weight decay (AdamW)
+                    p.data.add_(p.data, alpha=-lr * weight_decay)
 
         return loss
+

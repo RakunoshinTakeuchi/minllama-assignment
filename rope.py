@@ -36,40 +36,55 @@ def apply_rotary_emb(
     This function applies rotary embeddings to the given query and key tensors. The rotation to each token
     embedding is a function of that token's position in the sequence, head_dim, and theta.
     The input tensors are reshaped as complex numbers to simplify your implementation.
-
-    Args:
-        query (torch.Tensor): Query tensor to apply rotary embeddings.
-                              Shape: (batch_size, seqlen, n_local_heads, self.head_dim)
-        key (torch.Tensor): Key tensor to apply rotary embeddings.
-                              Shape: (batch_size, seqlen, n_local_kv_heads, self.head_dim)
-        head_dim (int): Dimension of each attention head.
-        max_seq_len (int): Maximum sequence length supported by model.
-    Returns:
-        Tuple[torch.Tensor, torch.Tensor]: Tuple of modified query tensor and key tensor with rotary embeddings.
     """
-
     _, seqlen, _, _ = query.shape
     device = query.device
-    # todo
-    #
-    # Please refer to slide 22 in https://phontron.com/class/anlp2024/assets/slides/anlp-05-transformers.pdf
-    # and Section 3 in https://arxiv.org/abs/2104.09864.
+    dtype = query.dtype
 
-    # reshape xq and xk to match the complex representation
+    # query/key を複素数表現に分解
+    # shape: (..., head_dim/2) になる
     query_real, query_imag = query.float().reshape(query.shape[:-1] + (-1, 2)).unbind(-1)
     key_real, key_imag = key.float().reshape(key.shape[:-1] + (-1, 2)).unbind(-1)
-    # This separates each query/key vector into its odd and even indices (assuming *one-indexing*).
-    # query_real contains q_1, q_3, q_5, ... and query_imag contains q_2, q_4, q_6, ...
 
-    # First, compute the trigonometric values in the second and fourth columns in
-    # slide 22 (linked above).
+    # -----------------------------
+    # 1. 角度 theta_pos_k を計算
+    # -----------------------------
+    # 位置インデックス: [0, 1, ..., seqlen-1]
+    pos = torch.arange(seqlen, device=device, dtype=torch.float32)  # (seqlen,)
 
-    # Then, combine these trigonometric values with the tensors query_real, query_imag,
-    # key_real, and key_imag.
+    # 周波数: inv_freq の次元は head_dim/2
+    # 典型的な定義: 1 / (theta^(2i / head_dim))
+    half_dim = head_dim // 2
+    inv_freq = 1.0 / (theta ** (torch.arange(0, half_dim, device=device, dtype=torch.float32) / half_dim))
+    # freqs: (seqlen, half_dim)
+    freqs = torch.einsum("i,j->ij", pos, inv_freq)
 
-    raise NotImplementedError
+    # cos, sin: (seqlen, half_dim)
+    cos = freqs.cos()
+    sin = freqs.sin()
 
-    query_out = None
-    key_out = None
+    # query_real: (B, seqlen, H, half_dim)
+    # reshape_for_broadcast で (1, seqlen, 1, half_dim) にしてブロードキャスト
+    cos = reshape_for_broadcast(cos, query_real)
+    sin = reshape_for_broadcast(sin, query_real)
+
+    # -----------------------------------------
+    # 2. 複素数の回転: (real + i imag) * (cos + i sin)
+    # -----------------------------------------
+    # out_real = real * cos - imag * sin
+    # out_imag = real * sin + imag * cos
+    q_out_real = query_real * cos - query_imag * sin
+    q_out_imag = query_real * sin + query_imag * cos
+
+    k_out_real = key_real * cos - key_imag * sin
+    k_out_imag = key_real * sin + key_imag * cos
+
+    # -----------------------------
+    # 3. 実部・虚部を元の形に戻す
+    # -----------------------------
+    # stack(..., dim=-1) で (..., half_dim, 2) → reshape で (..., head_dim)
+    query_out = torch.stack((q_out_real, q_out_imag), dim=-1).reshape_as(query).type_as(query)
+    key_out = torch.stack((k_out_real, k_out_imag), dim=-1).reshape_as(key).type_as(key)
+
     # Return the rotary position embeddings for the query and key tensors
     return query_out, key_out

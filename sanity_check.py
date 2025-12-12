@@ -15,6 +15,18 @@ sent_ids = torch.tensor([[101, 7592, 2088, 102, 0, 0, 0, 0],
 llama = load_pretrained("stories42M.pt")
 with torch.no_grad():
     logits, hidden_states = llama(sent_ids)
+
+    # デバッグ用
+    print("logits shape:", logits.shape)
+    print("sanity logits shape:", sanity_data["logits"].shape)
+    print("max |diff logits|:", (logits - sanity_data["logits"]).abs().max().item())
+
+    print("hidden shape:", hidden_states.shape)
+    print("sanity hidden shape:", sanity_data["hidden_states"].shape)
+    print("max |diff hidden|:", (hidden_states - sanity_data["hidden_states"]).abs().max().item())
+
     assert torch.allclose(logits, sanity_data["logits"], atol=1e-5, rtol=1e-3)
     assert torch.allclose(hidden_states, sanity_data["hidden_states"], atol=1e-5, rtol=1e-3)
     print("Your Llama implementation is correct!")
+
+    
