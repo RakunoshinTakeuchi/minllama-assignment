@@ -1,1 +1,4 @@
 stories42M.pt
+venv/
+data/
+__pycache__/
